@@ -1,0 +1,61 @@
+name: Podcast Transcription Request
+description: Request transcription of a podcast episode
+title: "[Transcription] "
+labels: ["transcription"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Podcast Transcription Request
+        
+        Use this form to request transcription of a podcast episode. Please provide the episode title, audio URL, and any additional context.
+        
+  - type: input
+    id: title
+    attributes:
+      label: Title
+      description: Add a title for the transcript (e.g., episode name, podcast title)
+      placeholder: "Episode 301: My Amazing Podcast"
+    validations:
+      required: true
+
+  - type: input
+    id: url
+    attributes:
+      label: Audio URL
+      description: Direct link to the audio file (MP3, WAV, M4A, OGG, FLAC, AAC)
+      placeholder: "https://example.com/podcast-episode.mp3"
+    validations:
+      required: true
+      
+  - type: textarea
+    id: content
+    attributes:
+      label: Content
+      description: |
+        Add any custom commentary, show notes, or additional context about this episode.
+        
+        This is optional but can help provide context for the transcript.
+      placeholder: |
+        This episode covers fascinating topics about AI and machine learning...
+        
+        Key topics discussed:
+        - Neural networks
+        - Machine learning applications
+        - Future of AI
+    validations:
+      required: false
+      
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        
+        **Note:** After submitting this issue, a GitHub Action will automatically:
+        1. Download the audio from the provided URL
+        2. Transcribe the audio using OpenAI Whisper
+        3. Clean up the transcript using AI
+        4. Create a pull request with the final transcript
+        
+        Please ensure your audio URL is publicly accessible and points directly to an audio file.
