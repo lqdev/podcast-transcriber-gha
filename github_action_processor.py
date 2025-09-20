@@ -132,9 +132,16 @@ def main():
         filepath = create_transcript_file(title, content, transcript)
         print(f"Transcript saved to: {filepath}")
         
-        # Set output for GitHub Actions
-        print(f"::set-output name=transcript_file::{filepath}")
-        print(f"::set-output name=title::{title}")
+        # Set output for GitHub Actions using environment file
+        github_output = os.environ.get('GITHUB_OUTPUT')
+        if github_output:
+            with open(github_output, 'a') as f:
+                f.write(f"transcript_file={filepath}\n")
+                f.write(f"title={title}\n")
+        else:
+            # Fallback to deprecated method for backwards compatibility
+            print(f"::set-output name=transcript_file::{filepath}")
+            print(f"::set-output name=title::{title}")
         
     except Exception as e:
         print(f"Error processing issue: {e}")

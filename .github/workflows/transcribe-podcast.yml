@@ -13,6 +13,7 @@ jobs:
       contents: write
       pull-requests: write
       issues: write
+      models: read
 
     steps:
     - name: Checkout repository
@@ -51,44 +52,71 @@ jobs:
         TRANSCRIPT_FILE: ${{ steps.transcribe.outputs.transcript_file }}
       run: |
         uv run python postprocess_transcript.py
+        
+        # Check if cleaned file was created, fallback to original if not
+        if [ ! -f "${{ steps.postprocess.outputs.cleaned_file }}" ]; then
+          echo "⚠️  Cleaned file not found, using original transcript"
+          echo "cleaned_file=${{ steps.transcribe.outputs.transcript_file }}" >> $GITHUB_OUTPUT
+        fi
 
     - name: Create Pull Request
       id: create_pr
+      uses: actions/github-script@v7
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         TRANSCRIPT_FILE: ${{ steps.postprocess.outputs.cleaned_file }}
         ISSUE_TITLE: ${{ steps.transcribe.outputs.title }}
         ISSUE_NUMBER: ${{ github.event.issue.number }}
-      run: |
-        # Configure git
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        
-        # Create a new branch
-        BRANCH_NAME="transcript-issue-${{ github.event.issue.number }}"
-        git checkout -b "$BRANCH_NAME"
-        
-        # Add the transcript file
-        git add "${{ steps.postprocess.outputs.cleaned_file }}"
-        
-        # Commit changes
-        git commit -m "Add transcript for: ${{ steps.transcribe.outputs.title }}"
-        
-        # Push branch
-        git push origin "$BRANCH_NAME"
-        
-        # Create pull request using GitHub API
-        curl -X POST \
-          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-          -H "Accept: application/vnd.github.v3+json" \
-          -H "Content-Type: application/json" \
-          -d '{
-            "title": "Transcript: ${{ steps.transcribe.outputs.title }}",
-            "body": "This PR contains the auto-generated transcript for issue #${{ github.event.issue.number }}\n\n**Original Issue:** #${{ github.event.issue.number }}\n**Transcript File:** `${{ steps.postprocess.outputs.cleaned_file }}`\n\nThe transcript has been automatically generated using OpenAI Whisper and post-processed with GitHub Models for better readability.\n\nCloses #${{ github.event.issue.number }}",
-            "head": "$BRANCH_NAME",
-            "base": "main"
-          }' \
-          https://api.github.com/repos/${{ github.repository }}/pulls
+      with:
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+          
+          // Get environment variables
+          const transcriptFile = process.env.TRANSCRIPT_FILE;
+          const issueTitle = process.env.ISSUE_TITLE;
+          const issueNumber = process.env.ISSUE_NUMBER;
+          
+          // Configure git
+          await exec.exec('git', ['config', '--local', 'user.email', 'action@github.com']);
+          await exec.exec('git', ['config', '--local', 'user.name', 'GitHub Action']);
+          
+          // Create a new branch
+          const branchName = `transcript-issue-${issueNumber}`;
+          await exec.exec('git', ['checkout', '-b', branchName]);
+          
+          // Add the transcript file
+          await exec.exec('git', ['add', transcriptFile]);
+          
+          // Commit changes
+          await exec.exec('git', ['commit', '-m', `Add transcript for: ${issueTitle}`]);
+          
+          // Push branch
+          await exec.exec('git', ['push', 'origin', branchName]);
+          
+          // Create pull request using GitHub API
+          try {
+            const { data: pullRequest } = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Transcript: ${issueTitle}`,
+              body: `This PR contains the auto-generated transcript for issue #${issueNumber}
+
+            **Original Issue:** #${issueNumber}
+            **Transcript File:** \`${transcriptFile}\`
+
+            The transcript has been automatically generated using OpenAI Whisper and post-processed with GitHub Models for better readability.
+
+            Closes #${issueNumber}`,
+              head: branchName,
+              base: 'main'
+            });
+            
+            console.log(`✅ Pull request created: ${pullRequest.html_url}`);
+            return { number: pullRequest.number, url: pullRequest.html_url };
+          } catch (error) {
+            console.error('❌ Failed to create pull request:', error);
+            throw error;
+          }
 
     - name: Comment on issue
       uses: actions/github-script@v7

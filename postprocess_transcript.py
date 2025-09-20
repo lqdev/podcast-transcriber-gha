@@ -2,13 +2,14 @@ import os
 import sys
 import requests
 import json
+import shutil
 from pathlib import Path
 
 
 def call_github_models(prompt: str, max_tokens: int = 4000) -> str:
     """Call GitHub Models API to post-process the transcript."""
     
-    # GitHub Models API endpoint
+    # GitHub Models API endpoint (correct one from documentation)
     url = "https://models.github.ai/inference/chat/completions"
     
     headers = {
@@ -16,9 +17,9 @@ def call_github_models(prompt: str, max_tokens: int = 4000) -> str:
         "Content-Type": "application/json"
     }
     
-    # Use GPT-4 for better text processing
+    # Use GPT-4 for better text processing - format as per documentation
     payload = {
-        "model": "gpt-4o",
+        "model": "openai/gpt-4o",
         "messages": [
             {
                 "role": "system",
@@ -45,14 +46,24 @@ Return only the cleaned transcript without any additional commentary."""
     }
     
     try:
+        print(f"Calling GitHub Models API: {url}")
         response = requests.post(url, headers=headers, json=payload)
         response.raise_for_status()
         
         result = response.json()
+        print("✅ GitHub Models API call successful")
         return result["choices"][0]["message"]["content"]
         
+    except requests.exceptions.HTTPError as e:
+        print(f"❌ HTTP Error: {e}")
+        if e.response.status_code == 403:
+            print("   This usually means the repository doesn't have 'models: read' permission")
+            print("   Add 'models: read' to the workflow permissions section")
+        elif e.response.status_code == 401:
+            print("   This usually means the GITHUB_TOKEN is invalid or missing")
+        return None
     except Exception as e:
-        print(f"Error calling GitHub Models API: {e}")
+        print(f"❌ Error calling GitHub Models API: {e}")
         return None
 
 
@@ -134,13 +145,26 @@ def main():
     cleaned_file = process_transcript_file(transcript_file)
     
     if not cleaned_file:
-        print("Error: Failed to process transcript")
-        sys.exit(1)
+        print("Error: Failed to process transcript, using original file")
+        # Create a copy of the original with "_cleaned" suffix as fallback
+        original_path = Path(transcript_file)
+        cleaned_file = str(original_path.parent / f"{original_path.stem}_cleaned{original_path.suffix}")
+        
+        # Copy original to cleaned location
+        import shutil
+        shutil.copy2(transcript_file, cleaned_file)
+        print(f"⚠️  Fallback: Copied original to {cleaned_file}")
     
     print(f"Cleaned transcript saved to: {cleaned_file}")
     
-    # Set output for GitHub Actions
-    print(f"::set-output name=cleaned_file::{cleaned_file}")
+    # Set output for GitHub Actions using environment file
+    github_output = os.environ.get('GITHUB_OUTPUT')
+    if github_output:
+        with open(github_output, 'a') as f:
+            f.write(f"cleaned_file={cleaned_file}\n")
+    else:
+        # Fallback to deprecated method for backwards compatibility
+        print(f"::set-output name=cleaned_file::{cleaned_file}")
 
 
 if __name__ == "__main__":
