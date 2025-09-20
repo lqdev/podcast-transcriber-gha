@@ -9,7 +9,7 @@ def call_github_models(prompt: str, max_tokens: int = 4000) -> str:
     """Call GitHub Models API to post-process the transcript."""
     
     # GitHub Models API endpoint
-    url = "https://models.inference.ai.azure.com/chat/completions"
+    url = "https://models.github.ai/inference/chat/completions"
     
     headers = {
         "Authorization": f"Bearer {os.environ.get('GITHUB_TOKEN')}",
