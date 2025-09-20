@@ -9,21 +9,17 @@ from pathlib import Path
 def call_github_models(prompt: str, max_tokens: int = 4000) -> str:
     """Call GitHub Models API to post-process the transcript."""
     
-    # GitHub Models API endpoint - try multiple possible endpoints
-    endpoints = [
-        "https://models.inference.ai.azure.com/chat/completions",
-        "https://api.githubcopilot.com/chat/completions",
-        "https://models.github.ai/chat/completions"
-    ]
+    # GitHub Models API endpoint (correct one from documentation)
+    url = "https://models.github.ai/inference/chat/completions"
     
     headers = {
         "Authorization": f"Bearer {os.environ.get('GITHUB_TOKEN')}",
         "Content-Type": "application/json"
     }
     
-    # Use GPT-4 for better text processing
+    # Use GPT-4 for better text processing - format as per documentation
     payload = {
-        "model": "gpt-4o",
+        "model": "openai/gpt-4o",
         "messages": [
             {
                 "role": "system",
@@ -49,28 +45,26 @@ Return only the cleaned transcript without any additional commentary."""
         "temperature": 0.3
     }
     
-    # Try each endpoint until one works
-    for url in endpoints:
-        try:
-            print(f"Trying GitHub Models API endpoint: {url}")
-            response = requests.post(url, headers=headers, json=payload)
-            response.raise_for_status()
-            
-            result = response.json()
-            print("✅ GitHub Models API call successful")
-            return result["choices"][0]["message"]["content"]
-            
-        except requests.exceptions.HTTPError as e:
-            print(f"❌ HTTP Error with endpoint {url}: {e}")
-            if e.response.status_code == 403:
-                print("   This usually means the repository doesn't have access to GitHub Models")
-            continue
-        except Exception as e:
-            print(f"❌ Error with endpoint {url}: {e}")
-            continue
-    
-    print("⚠️  All GitHub Models API endpoints failed, will use original transcript")
-    return None
+    try:
+        print(f"Calling GitHub Models API: {url}")
+        response = requests.post(url, headers=headers, json=payload)
+        response.raise_for_status()
+        
+        result = response.json()
+        print("✅ GitHub Models API call successful")
+        return result["choices"][0]["message"]["content"]
+        
+    except requests.exceptions.HTTPError as e:
+        print(f"❌ HTTP Error: {e}")
+        if e.response.status_code == 403:
+            print("   This usually means the repository doesn't have 'models: read' permission")
+            print("   Add 'models: read' to the workflow permissions section")
+        elif e.response.status_code == 401:
+            print("   This usually means the GITHUB_TOKEN is invalid or missing")
+        return None
+    except Exception as e:
+        print(f"❌ Error calling GitHub Models API: {e}")
+        return None
 
 
 def process_transcript_file(filepath: str) -> str:
