@@ -51,6 +51,12 @@ jobs:
         TRANSCRIPT_FILE: ${{ steps.transcribe.outputs.transcript_file }}
       run: |
         uv run python postprocess_transcript.py
+        
+        # Check if cleaned file was created, fallback to original if not
+        if [ ! -f "${{ steps.postprocess.outputs.cleaned_file }}" ]; then
+          echo "⚠️  Cleaned file not found, using original transcript"
+          echo "cleaned_file=${{ steps.transcribe.outputs.transcript_file }}" >> $GITHUB_OUTPUT
+        fi
 
     - name: Create Pull Request
       id: create_pr

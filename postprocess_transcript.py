@@ -2,6 +2,7 @@ import os
 import sys
 import requests
 import json
+import shutil
 from pathlib import Path
 
 
@@ -150,8 +151,15 @@ def main():
     cleaned_file = process_transcript_file(transcript_file)
     
     if not cleaned_file:
-        print("Error: Failed to process transcript")
-        sys.exit(1)
+        print("Error: Failed to process transcript, using original file")
+        # Create a copy of the original with "_cleaned" suffix as fallback
+        original_path = Path(transcript_file)
+        cleaned_file = str(original_path.parent / f"{original_path.stem}_cleaned{original_path.suffix}")
+        
+        # Copy original to cleaned location
+        import shutil
+        shutil.copy2(transcript_file, cleaned_file)
+        print(f"⚠️  Fallback: Copied original to {cleaned_file}")
     
     print(f"Cleaned transcript saved to: {cleaned_file}")
     
