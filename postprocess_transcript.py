@@ -8,8 +8,12 @@ from pathlib import Path
 def call_github_models(prompt: str, max_tokens: int = 4000) -> str:
     """Call GitHub Models API to post-process the transcript."""
     
-    # GitHub Models API endpoint
-    url = "https://models.github.ai/inference/chat/completions"
+    # GitHub Models API endpoint - try multiple possible endpoints
+    endpoints = [
+        "https://models.inference.ai.azure.com/chat/completions",
+        "https://api.githubcopilot.com/chat/completions",
+        "https://models.github.ai/chat/completions"
+    ]
     
     headers = {
         "Authorization": f"Bearer {os.environ.get('GITHUB_TOKEN')}",
@@ -44,16 +48,28 @@ Return only the cleaned transcript without any additional commentary."""
         "temperature": 0.3
     }
     
-    try:
-        response = requests.post(url, headers=headers, json=payload)
-        response.raise_for_status()
-        
-        result = response.json()
-        return result["choices"][0]["message"]["content"]
-        
-    except Exception as e:
-        print(f"Error calling GitHub Models API: {e}")
-        return None
+    # Try each endpoint until one works
+    for url in endpoints:
+        try:
+            print(f"Trying GitHub Models API endpoint: {url}")
+            response = requests.post(url, headers=headers, json=payload)
+            response.raise_for_status()
+            
+            result = response.json()
+            print("✅ GitHub Models API call successful")
+            return result["choices"][0]["message"]["content"]
+            
+        except requests.exceptions.HTTPError as e:
+            print(f"❌ HTTP Error with endpoint {url}: {e}")
+            if e.response.status_code == 403:
+                print("   This usually means the repository doesn't have access to GitHub Models")
+            continue
+        except Exception as e:
+            print(f"❌ Error with endpoint {url}: {e}")
+            continue
+    
+    print("⚠️  All GitHub Models API endpoints failed, will use original transcript")
+    return None
 
 
 def process_transcript_file(filepath: str) -> str:
@@ -139,8 +155,14 @@ def main():
     
     print(f"Cleaned transcript saved to: {cleaned_file}")
     
-    # Set output for GitHub Actions
-    print(f"::set-output name=cleaned_file::{cleaned_file}")
+    # Set output for GitHub Actions using environment file
+    github_output = os.environ.get('GITHUB_OUTPUT')
+    if github_output:
+        with open(github_output, 'a') as f:
+            f.write(f"cleaned_file={cleaned_file}\n")
+    else:
+        # Fallback to deprecated method for backwards compatibility
+        print(f"::set-output name=cleaned_file::{cleaned_file}")
 
 
 if __name__ == "__main__":
